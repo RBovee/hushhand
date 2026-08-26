@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { X_HANDLE, X_PROFILE_URL } from "@/lib/constants";
 import { ConnectButton } from "./wallet";
 
 export function SiteHeader() {
@@ -28,6 +29,14 @@ export function SiteHeader() {
         >
           Leaderboard
         </Link>
+        <a
+          href={X_PROFILE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm text-muted transition hover:text-foreground"
+        >
+          @{X_HANDLE}
+        </a>
         <ConnectButton />
       </nav>
     </header>

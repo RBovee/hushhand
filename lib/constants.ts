@@ -10,6 +10,9 @@ export const DEFAULT_FEE_BPS = Number(process.env.NEXT_PUBLIC_FEE_BPS ?? 200);
 export const DEFAULT_MIN_STAKE = process.env.NEXT_PUBLIC_MIN_STAKE ?? "0.1";
 export const DEFAULT_MIN_LOTTERY_POT =
   process.env.NEXT_PUBLIC_MIN_LOTTERY_POT ?? "0.05";
+export const X_PROFILE_URL =
+  process.env.NEXT_PUBLIC_X_PROFILE_URL ?? "https://x.com/CryptoNerd0_9";
+export const X_HANDLE = "CryptoNerd0_9";
 
 export function feePercentLabel(bps = DEFAULT_FEE_BPS) {
   return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2)}%`;
