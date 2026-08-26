@@ -5,7 +5,7 @@ import "@coti-io/coti-contracts/contracts/utils/mpc/MpcCore.sol";
 
 /// @title HushHand Private RPS
 /// @notice Two players stake native COTI and commit encrypted moves.
-/// Winner is computed with COTI MPC without publishing the gestures.
+/// Winner is computed with COTI MPC. Hands stay private until settle, then both are published.
 /// Win rake goes to feeRecipient. Draw rake funds a stake-weighted lottery.
 contract PrivateRps {
     enum Status {
@@ -25,6 +25,8 @@ contract PrivateRps {
         utUint64 moveB;
         Status status;
         uint64 createdAt;
+        uint64 revealedA;
+        uint64 revealedB;
     }
 
     uint16 public constant BPS_DENOMINATOR = 10_000;
@@ -66,6 +68,7 @@ contract PrivateRps {
         bool draw
     );
     event MatchCanceled(uint256 indexed matchId, address indexed player);
+    event HandsRevealed(uint256 indexed matchId, uint64 moveA, uint64 moveB);
     event LotteryTicketsIssued(
         uint256 indexed round,
         address indexed player,
@@ -144,7 +147,9 @@ contract PrivateRps {
             uint256 grossStake,
             uint256 escrowEach,
             Status status,
-            uint64 createdAt
+            uint64 createdAt,
+            uint64 revealedA,
+            uint64 revealedB
         )
     {
         Match storage m = matches[matchId];
@@ -154,7 +159,9 @@ contract PrivateRps {
             m.grossStake,
             m.escrowEach,
             m.status,
-            m.createdAt
+            m.createdAt,
+            m.revealedA,
+            m.revealedB
         );
     }
 
@@ -205,7 +212,7 @@ contract PrivateRps {
         _send(m.playerA, m.grossStake);
     }
 
-    /// @notice Computes the winner from encrypted moves. Gestures stay private.
+    /// @notice Pays the winner from encrypted moves, then publishes both hands.
     function settle(uint256 matchId) external {
         Match storage m = matches[matchId];
         require(m.status == Status.Ready, "not ready");
@@ -230,21 +237,26 @@ contract PrivateRps {
             emit MatchSettled(matchId, m.playerA, m.playerB, 0, true);
             _send(m.playerA, m.escrowEach);
             _send(m.playerB, m.escrowEach);
-            return;
+        } else {
+            // (a - b + 3) % 3 == 1 => A wins. Encoding: rock=1, paper=2, scissors=3.
+            gtUint64 diff = MpcCore.rem(MpcCore.sub(MpcCore.add(a, uint64(3)), b), uint64(3));
+            bool aWins = MpcCore.decrypt(MpcCore.eq(diff, uint64(1)));
+
+            address payable winner = aWins ? m.playerA : m.playerB;
+            address payable loser = aWins ? m.playerB : m.playerA;
+            uint256 pot = m.escrowEach * 2;
+            emit MatchSettled(matchId, winner, loser, pot, false);
+            if (feeEach > 0) {
+                _send(feeRecipient, feeEach * 2);
+            }
+            _send(winner, pot);
         }
 
-        // (a - b + 3) % 3 == 1 => A wins. Encoding: rock=1, paper=2, scissors=3.
-        gtUint64 diff = MpcCore.rem(MpcCore.sub(MpcCore.add(a, uint64(3)), b), uint64(3));
-        bool aWins = MpcCore.decrypt(MpcCore.eq(diff, uint64(1)));
-
-        address payable winner = aWins ? m.playerA : m.playerB;
-        address payable loser = aWins ? m.playerB : m.playerA;
-        uint256 pot = m.escrowEach * 2;
-        emit MatchSettled(matchId, winner, loser, pot, false);
-        if (feeEach > 0) {
-            _send(feeRecipient, feeEach * 2);
-        }
-        _send(winner, pot);
+        uint64 handA = MpcCore.decrypt(a);
+        uint64 handB = MpcCore.decrypt(b);
+        m.revealedA = handA;
+        m.revealedB = handB;
+        emit HandsRevealed(matchId, handA, handB);
     }
 
     /// @notice Pays the lottery pot to one ticket holder, weighted by stake-tickets.

@@ -31,6 +31,8 @@ export function MatchBoard() {
             escrowEach: BigInt(row.escrowEach),
             status: Number(row.status),
             createdAt: Number(row.createdAt),
+            revealedA: Number(row.revealedA ?? 0),
+            revealedB: Number(row.revealedB ?? 0),
           } satisfies PublicMatch;
         }),
       );

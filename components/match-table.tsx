@@ -8,6 +8,7 @@ import {
   HANDS,
   MOVE_CODES,
   STATUS,
+  handFromCode,
   type Hand,
 } from "@/lib/constants";
 import type { PublicMatch } from "@/lib/types";
@@ -43,6 +44,8 @@ export function MatchTable({ id }: { id: string }) {
       escrowEach: BigInt(row.escrowEach),
       status: Number(row.status),
       createdAt: Number(row.createdAt),
+      revealedA: Number(row.revealedA ?? 0),
+      revealedB: Number(row.revealedB ?? 0),
     });
   }, [id]);
 
@@ -136,12 +139,31 @@ export function MatchTable({ id }: { id: string }) {
           {open
             ? "Open — commit your encrypted hand to join"
             : ready
-              ? "Both hands are locked. Settle to pay the winner without revealing gestures."
+              ? "Both hands are locked. Settle pays the winner, then both gestures are published."
               : settled
-                ? "Settled. Hands stay private. Both players received lottery tickets equal to their stake."
+                ? "Settled. Lottery tickets minted. Hands below were private until this point."
                 : "Canceled"}
         </p>
       </section>
+
+      {settled && (match.revealedA > 0 || match.revealedB > 0) ? (
+        <section className="rounded-3xl border border-line bg-surface p-6 md:p-8">
+          <h2 className="font-serif text-2xl">Hands revealed</h2>
+          <p className="mt-2 text-sm text-muted">
+            Private until settle. Now on-chain for anyone to check.
+          </p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <RevealedHand
+              label={`Player A ${shortAddress(match.playerA)}`}
+              code={match.revealedA}
+            />
+            <RevealedHand
+              label={`Player B ${shortAddress(match.playerB)}`}
+              code={match.revealedB}
+            />
+          </div>
+        </section>
+      ) : null}
 
       {open && !mineA ? (
         <section className="rounded-3xl border border-line bg-surface p-6 md:p-8">
@@ -194,7 +216,7 @@ export function MatchTable({ id }: { id: string }) {
           disabled={pending !== null}
           className="w-full rounded-full bg-gold px-5 py-3 text-sm font-medium text-background disabled:opacity-60"
         >
-          {pending === "settle" ? "Settling privately…" : "Settle match"}
+          {pending === "settle" ? "Settling and revealing…" : "Settle and reveal hands"}
         </button>
       ) : null}
 
@@ -212,6 +234,19 @@ export function MatchTable({ id }: { id: string }) {
       <Link href="/" className="inline-block text-sm text-muted hover:text-gold">
         Back to tables
       </Link>
+    </div>
+  );
+}
+
+function RevealedHand({ label, code }: { label: string; code: number }) {
+  const hand = handFromCode(code);
+  return (
+    <div className="rounded-2xl border border-line px-4 py-5 text-center">
+      <p className="text-sm text-muted">{label}</p>
+      <p className="mt-3 text-3xl" aria-hidden>
+        {hand?.glyph ?? "?"}
+      </p>
+      <p className="mt-2 text-sm">{hand?.label ?? `Unknown (${code})`}</p>
     </div>
   );
 }

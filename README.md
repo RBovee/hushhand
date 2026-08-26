@@ -6,14 +6,14 @@ This is a separate product from [HushDeal](https://hushdeal.vercel.app). HushDea
 
 > Testnet only. Not a real-money casino.
 
-Live contract on COTI Testnet: [`0x6eB0F38d36fcBD7fB1cd148413EA32F119D7a246`](https://testnet.cotiscan.io/address/0x6eB0F38d36fcBD7fB1cd148413EA32F119D7a246). Win rake goes to [`0x400Ad4402a2Eee2ecE0894dF6c4742BAd5a2f06a`](https://testnet.cotiscan.io/address/0x400Ad4402a2Eee2ecE0894dF6c4742BAd5a2f06a).
+Live contract on COTI Testnet: [`0xE1959DEf514227E7A53718053C3d74f92c039c00`](https://testnet.cotiscan.io/address/0xE1959DEf514227E7A53718053C3d74f92c039c00). Win rake goes to [`0x400Ad4402a2Eee2ecE0894dF6c4742BAd5a2f06a`](https://testnet.cotiscan.io/address/0x400Ad4402a2Eee2ecE0894dF6c4742BAd5a2f06a).
 
 ## How a match works
 
 1. Connect MetaMask to COTI Testnet (`7082400`) and complete AES onboarding.
 2. Create a table: pick rock / paper / scissors and stake COTI. The move is encrypted with `encryptValue` against the contract function selector, then stored as COTI private state.
 3. A second wallet joins with the **same** stake and its own encrypted move.
-4. Anyone can call `settle`. MPC compares the hands with `(a - b + 3) % 3 == 1` (encoding rock=1, paper=2, scissors=3). Gestures are never decrypted. Only a winner/draw flag is revealed so the contract can pay.
+4. Anyone can call `settle`. MPC compares the hands with `(a - b + 3) % 3 == 1` (encoding rock=1, paper=2, scissors=3) and pays out **without** decrypting the gestures first. After payout, both hands are decrypted and published in a `HandsRevealed` event.
 
 ## Protocol fee and lottery
 

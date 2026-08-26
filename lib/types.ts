@@ -8,6 +8,8 @@ export interface PublicMatch {
   escrowEach: bigint;
   status: number;
   createdAt: number;
+  revealedA: number;
+  revealedB: number;
 }
 
 export type { Hand };

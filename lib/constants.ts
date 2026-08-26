@@ -5,7 +5,7 @@ export const COTI_EXPLORER =
   process.env.NEXT_PUBLIC_EXPLORER ?? "https://testnet.cotiscan.io";
 export const CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ??
-  "0x6eB0F38d36fcBD7fB1cd148413EA32F119D7a246";
+  "0xE1959DEf514227E7A53718053C3d74f92c039c00";
 export const DEFAULT_FEE_BPS = Number(process.env.NEXT_PUBLIC_FEE_BPS ?? 200);
 export const DEFAULT_MIN_STAKE = process.env.NEXT_PUBLIC_MIN_STAKE ?? "0.1";
 export const DEFAULT_MIN_LOTTERY_POT =
@@ -28,6 +28,10 @@ export const HANDS: { id: Hand; label: string; glyph: string }[] = [
   { id: "paper", label: "Paper", glyph: "📄" },
   { id: "scissors", label: "Scissors", glyph: "✂️" },
 ];
+
+export function handFromCode(code: number) {
+  return HANDS.find((item) => MOVE_CODES[item.id] === code) ?? null;
+}
 
 export const STATUS = {
   None: 0,
@@ -106,6 +110,8 @@ export const PRIVATE_RPS_ABI = [
       { name: "escrowEach", type: "uint256" },
       { name: "status", type: "uint8" },
       { name: "createdAt", type: "uint64" },
+      { name: "revealedA", type: "uint64" },
+      { name: "revealedB", type: "uint64" },
     ],
   },
   {
@@ -228,6 +234,15 @@ export const PRIVATE_RPS_ABI = [
     inputs: [
       { name: "matchId", type: "uint256", indexed: true },
       { name: "player", type: "address", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "HandsRevealed",
+    inputs: [
+      { name: "matchId", type: "uint256", indexed: true },
+      { name: "moveA", type: "uint64", indexed: false },
+      { name: "moveB", type: "uint64", indexed: false },
     ],
   },
   {
