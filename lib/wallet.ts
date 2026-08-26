@@ -4,6 +4,7 @@ import {
   BrowserProvider,
   Contract,
   JsonRpcProvider,
+  formatEther,
   type JsonRpcSigner,
 } from "@coti-io/coti-ethers";
 import {
@@ -34,6 +35,7 @@ const COTI_CHAIN = {
 };
 
 const AES_STORAGE_PREFIX = "hushhand.aes.";
+const GAS_HEADROOM = BigInt("2000000000000000"); // 0.002 COTI
 
 export function explorerTx(hash: string) {
   return `${COTI_EXPLORER}/tx/${hash}`;
@@ -48,33 +50,87 @@ export function shortAddress(address: string) {
 }
 
 export function walletErrorMessage(err: unknown): string {
+  return txErrorMessage(err, "Could not connect");
+}
+
+export function txErrorMessage(
+  err: unknown,
+  fallback = "Transaction failed",
+): string {
   const code = walletErrorCode(err);
   if (code === 4001) {
-    return "Connection rejected in MetaMask.";
+    return fallback === "Could not connect"
+      ? "Connection rejected in MetaMask."
+      : "Transaction rejected in MetaMask.";
   }
-  if (err instanceof Error && err.message) {
-    return err.message;
+  const text = [
+    collectErrorText(err),
+    err instanceof Error ? err.stack ?? "" : "",
+    safeErrorString(err),
+  ].join("\n");
+  const lower = text.toLowerCase();
+  if (
+    lower.includes("insufficient funds") ||
+    lower.includes("insufficient balance") ||
+    lower.includes("exceeds the balance") ||
+    lower.includes("exceeds balance") ||
+    (lower.includes(" have ") && lower.includes(" want "))
+  ) {
+    return "Not enough testnet COTI in this wallet for the stake plus gas.";
   }
-  if (typeof err === "string" && err) {
-    return err;
+  if (
+    lower.includes("user rejected") ||
+    lower.includes("user denied") ||
+    lower.includes("action_rejected")
+  ) {
+    return "Transaction rejected in MetaMask.";
   }
-  if (err && typeof err === "object") {
-    const value = err as {
-      shortMessage?: string;
-      message?: string;
-      data?: { message?: string; originalError?: { message?: string } };
-      error?: { message?: string };
-    };
-    return (
-      value.shortMessage ||
-      value.message ||
-      value.error?.message ||
-      value.data?.originalError?.message ||
-      value.data?.message ||
-      "Could not connect"
+  if (err && typeof err === "object" && "shortMessage" in err) {
+    const short = (err as { shortMessage?: string }).shortMessage;
+    if (short && !looksLikeRawDump(short)) {
+      return short;
+    }
+  }
+  const first = text
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line && !looksLikeRawDump(line));
+  if (first && !looksLikeRawDump(first)) {
+    return first;
+  }
+  return fallback;
+}
+
+export async function getCotiBalance(address: string): Promise<bigint> {
+  const provider = new JsonRpcProvider(COTI_TESTNET_RPC, COTI_TESTNET_CHAIN_ID);
+  return BigInt(await provider.getBalance(address));
+}
+
+export async function assertCanSpend(
+  needed: bigint,
+  action = "join",
+  from?: string | null,
+): Promise<void> {
+  let address = from ?? "";
+  if (!address) {
+    const signer = await getSigner();
+    address = await signer.getAddress();
+  }
+  const balance = await getCotiBalance(address);
+  const required = needed + GAS_HEADROOM;
+  if (balance >= required) {
+    return;
+  }
+  const have = formatCotiAmount(balance);
+  const stake = formatCotiAmount(needed);
+  if (balance < needed) {
+    throw new Error(
+      `Not enough testnet COTI to ${action}. This wallet has ${have} COTI; you need ${stake} COTI plus a little extra for gas.`,
     );
   }
-  return "Could not connect";
+  throw new Error(
+    `This wallet has ${have} COTI, enough for the ${stake} COTI stake but not the gas on top. Add a little more testnet COTI and try again.`,
+  );
 }
 
 export function getEthereum(): EthereumProvider {
@@ -211,11 +267,78 @@ async function ensureAesKey(signer: JsonRpcSigner) {
 }
 
 function isUnknownChain(err: unknown) {
-  const message = walletErrorMessage(err).toLowerCase();
+  const message = collectErrorText(err).toLowerCase();
   return (
     message.includes("unrecognized chain") ||
     message.includes("wallet_addethereumchain")
   );
+}
+
+function looksLikeRawDump(text: string) {
+  const lower = text.toLowerCase();
+  return (
+    text.length > 180 ||
+    lower.includes("transaction=") ||
+    lower.includes("info={") ||
+    lower.includes('"jsonrpc"')
+  );
+}
+
+function collectErrorText(err: unknown, seen = new Set<object>()): string {
+  if (err == null) {
+    return "";
+  }
+  if (typeof err === "string") {
+    return err;
+  }
+  if (typeof err !== "object") {
+    return String(err);
+  }
+  if (seen.has(err)) {
+    return "";
+  }
+  seen.add(err);
+  const value = err as {
+    shortMessage?: string;
+    reason?: string;
+    details?: string;
+    message?: string;
+    metaMessages?: string[];
+    info?: { error?: { message?: string } };
+    data?: { message?: string; originalError?: unknown };
+    error?: unknown;
+    cause?: unknown;
+  };
+  return [
+    value.shortMessage,
+    value.reason,
+    value.details,
+    value.message,
+    ...(Array.isArray(value.metaMessages) ? value.metaMessages : []),
+    value.info?.error?.message,
+    value.data?.message,
+    collectErrorText(value.error, seen),
+    collectErrorText(value.cause, seen),
+    collectErrorText(value.data?.originalError, seen),
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join("\n");
+}
+
+function safeErrorString(err: unknown) {
+  try {
+    return String(err);
+  } catch {
+    return "";
+  }
+}
+
+function formatCotiAmount(value: bigint) {
+  const asNumber = Number(formatEther(value));
+  if (!Number.isFinite(asNumber)) {
+    return formatEther(value);
+  }
+  return asNumber.toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 function walletErrorCode(err: unknown): number | undefined {

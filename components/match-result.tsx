@@ -13,6 +13,8 @@ interface MatchResultProps {
   outcome: MatchOutcome;
   viewer: string | null;
   payout: bigint;
+  grossStake: bigint;
+  escrowEach: bigint;
 }
 
 export function MatchResult({
@@ -23,6 +25,8 @@ export function MatchResult({
   outcome,
   viewer,
   payout,
+  grossStake,
+  escrowEach,
 }: MatchResultProps) {
   const mineA = isSame(viewer, playerA);
   const mineB = isSame(viewer, playerB);
@@ -94,6 +98,14 @@ export function MatchResult({
           {formatEther(payout)} COTI to the winner
         </p>
       ) : null}
+      {draw && grossStake > BigInt(0) ? (
+        <p className="mt-8 text-center text-sm text-gold">
+          Each staked {formatEther(grossStake)} COTI. Each was refunded{" "}
+          {formatEther(escrowEach)} COTI.{" "}
+          {formatEther((grossStake - escrowEach) * BigInt(2))} COTI went into
+          the lottery pot — not the full stake.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -140,7 +152,7 @@ function headlineFor(
   if (outcome === "draw") {
     return {
       title: "Draw",
-      sub: "Escrow back. Rake to the lottery. Tickets minted.",
+      sub: "Your stake is not in the pot. Only the rake is.",
       tone: "draw",
     };
   }

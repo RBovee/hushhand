@@ -24,6 +24,8 @@ export interface LotteryFunding {
   round: string;
   matchId: string;
   amount: bigint;
+  grossEach: bigint;
+  refundedEach: bigint;
 }
 
 export async function loadLottery(
@@ -93,9 +95,25 @@ export async function loadLotteryFunding(
       round: String(args.round),
       matchId: String(args.matchId),
       amount: BigInt(args.amount),
+      grossEach: BigInt(0),
+      refundedEach: BigInt(0),
     });
   }
-  return rows.reverse();
+  const detailed = await Promise.all(
+    rows.map(async (row) => {
+      try {
+        const match = await contract.getMatch(row.matchId);
+        return {
+          ...row,
+          grossEach: BigInt(match.grossStake),
+          refundedEach: BigInt(match.escrowEach),
+        };
+      } catch {
+        return row;
+      }
+    }),
+  );
+  return detailed.reverse();
 }
 
 export function ticketOdds(tickets: bigint, total: bigint) {
@@ -107,7 +125,10 @@ export function ticketOdds(tickets: bigint, total: bigint) {
 }
 
 export function formatTicketWeight(value: bigint) {
-  return `${formatCoti(value)} COTI`;
+  if (value === BigInt(0)) {
+    return "none";
+  }
+  return `from ${formatCoti(value)} COTI staked`;
 }
 
 export function formatPot(value: bigint) {

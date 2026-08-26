@@ -57,14 +57,15 @@ export function LotteryPot() {
       </div>
       <p className="mt-3 text-sm leading-relaxed text-muted">
         Only the {feePercentLabel()} rake from a tie goes in here — not the
-        full stake. Tickets are just odds. Anyone can draw at{" "}
+        full stake. After a tie, escrow is refunded. The odds weight below is
+        not money sitting in this pot. Anyone can draw at{" "}
         {lottery ? `${formatCoti(lottery.minPot)} COTI` : "the minimum"}.
       </p>
       {error ? <p className="mt-6 text-sm text-red-300">{error}</p> : null}
       {lottery ? (
         <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
           <div>
-            <dt className="text-muted">Pot</dt>
+            <dt className="text-muted">Pot (rake only)</dt>
             <dd className="mt-1 text-2xl text-gold">
               {formatCoti(lottery.pot)} COTI
             </dd>
@@ -76,7 +77,7 @@ export function LotteryPot() {
             </dd>
           </div>
           <div>
-            <dt className="text-muted">Your tickets</dt>
+            <dt className="text-muted">Odds weight</dt>
             <dd className="mt-1">
               {formatTicketWeight(mine?.tickets ?? BigInt(0))}
             </dd>

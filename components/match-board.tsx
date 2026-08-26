@@ -33,10 +33,6 @@ export function MatchBoard() {
             createdAt: Number(row.createdAt),
             revealedA: Number(row.revealedA ?? 0),
             revealedB: Number(row.revealedB ?? 0),
-            draw: null,
-            winner: null,
-            loser: null,
-            pot: null,
           } satisfies PublicMatch;
         }),
       );

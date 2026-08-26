@@ -19,6 +19,7 @@ import {
   getReadContract,
   getWriteContract,
   shortAddress,
+  txErrorMessage,
 } from "@/lib/wallet";
 import { useWallet } from "./wallet";
 
@@ -72,7 +73,7 @@ export function Lottery() {
       setTx(receipt?.hash ?? response.hash);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not draw lottery");
+      setError(txErrorMessage(err, "Could not draw lottery"));
     } finally {
       setPending(false);
     }
@@ -89,6 +90,9 @@ export function Lottery() {
     lottery.pot > BigInt(0) &&
     lottery.totalTickets > BigInt(0) &&
     (lottery.canDraw || isOwner);
+  const roundFunding = lottery
+    ? funding.filter((row) => row.round === lottery.round.toString())
+    : funding;
 
   return (
     <div className="space-y-8">
@@ -100,8 +104,9 @@ export function Lottery() {
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted">
           A {feePercentLabel()} rake is reserved from each stake. A winner pays
           that rake to the HushHand fee wallet. A tie puts that same rake into
-          this pot — not the full stake. Tickets are stake-weight for odds
-          only. When the pot reaches{" "}
+          this pot — not the full stake. After a tie, each player is refunded
+          their escrow. The names below show odds weight from what you staked,
+          not coins sitting here. When the pot reaches{" "}
           {lottery ? `${formatCoti(lottery.minPot)} COTI` : "the minimum"},
           anyone can draw.
         </p>
@@ -114,10 +119,13 @@ export function Lottery() {
         {lottery ? (
           <dl className="mt-8 grid gap-6 sm:grid-cols-3">
             <div>
-              <dt className="text-sm text-muted">Pot</dt>
+              <dt className="text-sm text-muted">Pot (rake only)</dt>
               <dd className="mt-2 font-serif text-4xl text-gold">
                 {formatCoti(lottery.pot)} COTI
               </dd>
+              <p className="mt-2 text-xs text-muted">
+                Stakes themselves are not in this pot.
+              </p>
             </div>
             <div>
               <dt className="text-sm text-muted">Your odds</dt>
@@ -126,7 +134,7 @@ export function Lottery() {
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-muted">Your tickets</dt>
+              <dt className="text-sm text-muted">Odds weight</dt>
               <dd className="mt-2 text-2xl">
                 {formatTicketWeight(mine?.tickets ?? BigInt(0))}
               </dd>
@@ -163,7 +171,8 @@ export function Lottery() {
       <section className="rounded-3xl border border-line bg-surface p-6 md:p-8">
         <h2 className="font-serif text-2xl">This round</h2>
         <p className="mt-2 text-sm text-muted">
-          Odds follow stake-weight, not the coins in the pot.
+          These figures are ticket weight for odds. They are not the pot, and
+          they were not added to it.
         </p>
         {lottery && lottery.players.length === 0 ? (
           <p className="mt-6 text-sm text-muted">
@@ -203,22 +212,76 @@ export function Lottery() {
         <h2 className="font-serif text-2xl">Ties that filled this pot</h2>
         <p className="mt-2 text-sm text-muted">
           Only the {feePercentLabel()} rake from a tie is added. The rest of
-          each stake is refunded.
+          each stake is refunded to the players.
         </p>
-        {funding.length === 0 ? (
+        {roundFunding.length === 0 ? (
           <p className="mt-4 text-sm text-muted">No ties have funded the pot yet.</p>
         ) : (
-          <ul className="mt-6 space-y-3">
-            {funding.map((row) => (
+          <>
+            {roundFunding.some((row) => row.grossEach > BigInt(0)) ? (
+              <dl className="mt-6 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-2xl border border-line px-4 py-3">
+                  <dt className="text-xs text-muted">Staked in those ties</dt>
+                  <dd className="mt-1 text-lg">
+                    {formatCoti(
+                      roundFunding.reduce(
+                        (sum, row) => sum + row.grossEach * BigInt(2),
+                        BigInt(0),
+                      ),
+                    )}{" "}
+                    COTI
+                  </dd>
+                  <p className="mt-1 text-xs text-muted">Refunded, not in the pot</p>
+                </div>
+                <div className="rounded-2xl border border-line px-4 py-3">
+                  <dt className="text-xs text-muted">Refunded to players</dt>
+                  <dd className="mt-1 text-lg">
+                    {formatCoti(
+                      roundFunding.reduce(
+                        (sum, row) => sum + row.refundedEach * BigInt(2),
+                        BigInt(0),
+                      ),
+                    )}{" "}
+                    COTI
+                  </dd>
+                </div>
+                <div className="rounded-2xl border border-gold/40 bg-gold/5 px-4 py-3">
+                  <dt className="text-xs text-muted">Added to this pot</dt>
+                  <dd className="mt-1 text-lg text-gold">
+                    {formatCoti(
+                      roundFunding.reduce((sum, row) => sum + row.amount, BigInt(0)),
+                    )}{" "}
+                    COTI
+                  </dd>
+                  <p className="mt-1 text-xs text-muted">
+                    {feePercentLabel()} rake only
+                  </p>
+                </div>
+              </dl>
+            ) : null}
+            <ul className="mt-6 space-y-3">
+            {roundFunding.map((row) => (
               <li
                 key={`${row.round}-${row.matchId}`}
-                className="flex items-center justify-between rounded-2xl border border-line px-4 py-3 text-sm"
+                className="rounded-2xl border border-line px-4 py-3 text-sm"
               >
-                <span>Table #{row.matchId} · round #{row.round}</span>
-                <span className="text-gold">+{formatCoti(row.amount)} COTI</span>
+                <div className="flex items-center justify-between gap-4">
+                  <span>Table #{row.matchId}</span>
+                  <span className="text-gold">
+                    +{formatCoti(row.amount)} COTI to pot
+                  </span>
+                </div>
+                {row.grossEach > BigInt(0) ? (
+                  <p className="mt-2 text-xs text-muted">
+                    Each staked {formatCoti(row.grossEach)} COTI. Each was
+                    refunded {formatCoti(row.refundedEach)} COTI. That stake is
+                    ticket weight for odds — it is not sitting in the pot.
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
+          </>
         )}
       </section>
 

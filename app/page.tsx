@@ -21,8 +21,9 @@ export default function HomePage() {
         <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
           A {feePercentLabel()} rake is reserved from each stake. A winner
           sends that rake to the HushHand fee wallet. A tie drops it into the
-          lottery pot instead. Every settled game mints tickets equal to your
-          stake.
+          lottery pot instead — not the full stake. Every settled game mints
+          odds-weight tickets equal to what you staked; that is not money in
+          the pot.
         </p>
       </section>
 
@@ -41,7 +42,7 @@ export default function HomePage() {
           {
             step: "03",
             title: "Settle privately",
-            body: "MPC names a winner. Hands stay private. Ties fund the lottery. Both players get tickets.",
+            body: "MPC names a winner. Hands stay private. Ties add only the rake to the lottery, then refund the rest.",
           },
         ].map((item) => (
           <li

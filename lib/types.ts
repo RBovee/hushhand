@@ -10,10 +10,6 @@ export interface PublicMatch {
   createdAt: number;
   revealedA: number;
   revealedB: number;
-  draw: boolean | null;
-  winner: string | null;
-  loser: string | null;
-  pot: bigint | null;
 }
 
 export type { Hand };

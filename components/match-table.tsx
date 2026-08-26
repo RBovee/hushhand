@@ -14,13 +14,18 @@ import type { PublicMatch } from "@/lib/types";
 import {
   encryptMove,
   explorerTx,
+  getCotiBalance,
   getReadContract,
   getWriteContract,
   shortAddress,
+  txErrorMessage,
+  assertCanSpend,
 } from "@/lib/wallet";
 import { ZERO_ADDRESS } from "@/lib/zero";
 import { MatchResult } from "./match-result";
 import { outcomeFromHands } from "@/lib/outcome";
+import { useWallet } from "./wallet";
+import { formatCoti } from "@/lib/leaderboard";
 
 export function MatchTable({ id }: { id: string }) {
   const { address, connect } = useWallet();
@@ -31,6 +36,7 @@ export function MatchTable({ id }: { id: string }) {
     CONTRACT_ADDRESS ? null : "Contract address is not configured yet.",
   );
   const [tx, setTx] = useState<string | null>(null);
+  const [balance, setBalance] = useState<bigint | null>(null);
 
   const refresh = useCallback(async () => {
     if (!CONTRACT_ADDRESS) return;
@@ -62,6 +68,19 @@ export function MatchTable({ id }: { id: string }) {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    if (!address) {
+      setBalance(null);
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      void getCotiBalance(address)
+        .then(setBalance)
+        .catch(() => setBalance(null));
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [address, pending, match?.id]);
+
   async function run(label: string, fn: () => Promise<string>) {
     setError(null);
     setPending(label);
@@ -71,7 +90,7 @@ export function MatchTable({ id }: { id: string }) {
       setTx(hash);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Transaction failed");
+      setError(txErrorMessage(err, "Transaction failed"));
     } finally {
       setPending(null);
     }
@@ -79,10 +98,12 @@ export function MatchTable({ id }: { id: string }) {
 
   async function join() {
     await run("join", async () => {
+      const stake = match?.grossStake ?? parseEther("0");
+      await assertCanSpend(stake, "join");
       const encrypted = await encryptMove(MOVE_CODES[hand], "joinMatch");
       const contract = await getWriteContract();
       const response = await contract.joinMatch(id, encrypted, {
-        value: match?.grossStake ?? parseEther("0"),
+        value: stake,
       });
       const receipt = await response.wait();
       return receipt?.hash ?? response.hash;
@@ -119,6 +140,9 @@ export function MatchTable({ id }: { id: string }) {
   const open = match.status === STATUS.Open;
   const ready = match.status === STATUS.Ready;
   const settled = match.status === STATUS.Settled;
+  const tooPoorToJoin = Boolean(
+    address && balance !== null && balance < match.grossStake,
+  );
   const outcome = settled
     ? outcomeFromHands(match.revealedA, match.revealedB)
     : null;
@@ -158,6 +182,8 @@ export function MatchTable({ id }: { id: string }) {
           outcome={outcome}
           viewer={address}
           payout={match.escrowEach * BigInt(2)}
+          grossStake={match.grossStake}
+          escrowEach={match.escrowEach}
         />
       ) : null}
 
@@ -186,11 +212,21 @@ export function MatchTable({ id }: { id: string }) {
           <button
             type="button"
             onClick={() => void join()}
-            disabled={pending !== null}
+            disabled={pending !== null || tooPoorToJoin}
             className="mt-6 w-full rounded-full bg-gold px-5 py-3 text-sm font-medium text-background disabled:opacity-60"
           >
-            {pending === "join" ? "Joining…" : `Join for ${formatEther(match.grossStake)} COTI`}
+            {pending === "join"
+              ? "Joining…"
+              : tooPoorToJoin
+                ? "Not enough COTI to join"
+                : `Join for ${formatEther(match.grossStake)} COTI`}
           </button>
+          {tooPoorToJoin && balance !== null ? (
+            <p className="mt-3 text-sm text-red-300">
+              This wallet has {formatCoti(balance)} COTI. You need{" "}
+              {formatEther(match.grossStake)} COTI plus a little extra for gas.
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -216,7 +252,9 @@ export function MatchTable({ id }: { id: string }) {
         </button>
       ) : null}
 
-      {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      {error ? (
+        <p className="max-w-xl text-sm break-words text-red-300">{error}</p>
+      ) : null}
       {tx ? (
         <a
           className="block text-sm text-gold"
