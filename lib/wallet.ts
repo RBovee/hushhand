@@ -133,10 +133,33 @@ export async function assertCanSpend(
   );
 }
 
-export function getEthereum(): EthereumProvider {
+export function isMobileDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+export function hasInjectedWallet() {
+  return Boolean(getInjectedEthereum());
+}
+
+export function metamaskDappLink(target = window.location.href) {
+  const url = new URL(target);
+  return `https://metamask.app.link/dapp/${url.host}${url.pathname}${url.search}`;
+}
+
+export function openInMetaMaskApp() {
+  window.location.assign(metamaskDappLink());
+}
+
+function getInjectedEthereum(): EthereumProvider | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
   const injected = (window as Window & { ethereum?: EthereumProvider }).ethereum;
   if (!injected) {
-    throw new Error("Install MetaMask to play HushHand");
+    return null;
   }
   if (Array.isArray(injected.providers) && injected.providers.length > 0) {
     return injected.providers.find((provider) => provider.isMetaMask) ?? injected;
@@ -144,12 +167,31 @@ export function getEthereum(): EthereumProvider {
   return injected;
 }
 
-export async function connectWallet(): Promise<string> {
-  const ethereum = getEthereum();
-  await ethereum.request({ method: "eth_requestAccounts" });
-  await ensureCotiChain(ethereum);
+export function getEthereum(): EthereumProvider {
+  const injected = getInjectedEthereum();
+  if (!injected) {
+    throw new Error(
+      isMobileDevice()
+        ? "Open HushHand inside the MetaMask app to connect."
+        : "Install MetaMask to play HushHand",
+    );
+  }
+  return injected;
+}
 
-  const provider = new BrowserProvider(ethereum, COTI_TESTNET_CHAIN_ID);
+export async function connectWallet(): Promise<string> {
+  const injected = getInjectedEthereum();
+  if (!injected) {
+    if (isMobileDevice()) {
+      openInMetaMaskApp();
+      throw new Error("Opening MetaMask. Approve there, then play in the MetaMask browser.");
+    }
+    throw new Error("Install the MetaMask extension to play HushHand");
+  }
+  await injected.request({ method: "eth_requestAccounts" });
+  await ensureCotiChain(injected);
+
+  const provider = new BrowserProvider(injected, COTI_TESTNET_CHAIN_ID);
   const signer = await provider.getSigner();
   await ensureAesKey(signer);
   return signer.getAddress();

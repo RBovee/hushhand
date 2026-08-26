@@ -9,7 +9,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { connectWallet, getEthereum, shortAddress, walletErrorMessage } from "@/lib/wallet";
+import {
+  connectWallet,
+  getEthereum,
+  hasInjectedWallet,
+  isMobileDevice,
+  openInMetaMaskApp,
+  shortAddress,
+  walletErrorMessage,
+} from "@/lib/wallet";
 
 interface WalletState {
   address: string | null;
@@ -26,20 +34,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let ethereum: ReturnType<typeof getEthereum>;
+    let provider: ReturnType<typeof getEthereum>;
     try {
-      ethereum = getEthereum();
+      provider = getEthereum();
     } catch {
       return;
     }
-    if (!ethereum.on) return;
+    void provider
+      .request({ method: "eth_accounts" })
+      .then((accounts) => {
+        if (Array.isArray(accounts) && typeof accounts[0] === "string") {
+          setAddress(accounts[0]);
+        }
+      })
+      .catch(() => {
+        // Ignore; user can tap Connect.
+      });
+    if (!provider.on) return;
     const handler = (...args: unknown[]) => {
       const accounts = Array.isArray(args[0]) ? (args[0] as string[]) : [];
       setAddress(accounts[0] ?? null);
     };
-    ethereum.on("accountsChanged", handler);
+    provider.on("accountsChanged", handler);
     return () => {
-      ethereum.removeListener?.("accountsChanged", handler);
+      provider.removeListener?.("accountsChanged", handler);
     };
   }, []);
 
@@ -76,11 +94,23 @@ export function useWallet() {
 
 export function ConnectButton() {
   const { address, connecting, connect, error } = useWallet();
+  const [needsMetaMaskApp, setNeedsMetaMaskApp] = useState(false);
+
+  useEffect(() => {
+    setNeedsMetaMaskApp(isMobileDevice() && !hasInjectedWallet());
+  }, []);
+
   return (
     <div className="flex flex-col items-end gap-1">
       <button
         type="button"
-        onClick={() => void connect()}
+        onClick={() => {
+          if (needsMetaMaskApp) {
+            openInMetaMaskApp();
+            return;
+          }
+          void connect();
+        }}
         disabled={connecting}
         className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition hover:bg-gold disabled:opacity-60"
       >
@@ -88,8 +118,15 @@ export function ConnectButton() {
           ? "Connecting…"
           : address
             ? shortAddress(address)
-            : "Connect wallet"}
+            : needsMetaMaskApp
+              ? "Open in MetaMask"
+              : "Connect wallet"}
       </button>
+      {needsMetaMaskApp && !address ? (
+        <p className="max-w-[14rem] text-right text-xs text-muted">
+          Phone browsers have no wallet. This opens HushHand inside MetaMask.
+        </p>
+      ) : null}
       {error ? (
         <p className="max-w-xs text-right text-xs text-red-300">{error}</p>
       ) : null}
