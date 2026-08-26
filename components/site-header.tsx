@@ -7,8 +7,17 @@ import { ConnectButton } from "./wallet";
 export function SiteHeader() {
   return (
     <header className="flex flex-wrap items-center justify-between gap-4">
-      <Link href="/" className="text-sm tracking-[0.2em] text-gold uppercase">
-        HushHand
+      <Link href="/" className="flex items-center gap-3">
+        <img
+          src="/hushhand-mark.png?v=2"
+          alt=""
+          width={48}
+          height={48}
+          className="h-12 w-12 object-contain"
+        />
+        <span className="text-sm tracking-[0.2em] text-gold uppercase">
+          HushHand
+        </span>
       </Link>
       <nav className="flex items-center gap-5">
         <Link
