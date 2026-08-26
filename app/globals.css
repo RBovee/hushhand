@@ -6,6 +6,7 @@
   --muted: #9a948a;
   --gold: #d4b483;
   --ok: #8fcd9a;
+  --loss: #e08b7a;
   --surface: #14161a;
   --line: rgba(244, 241, 234, 0.08);
 }
@@ -16,6 +17,7 @@
   --color-muted: var(--muted);
   --color-gold: var(--gold);
   --color-ok: var(--ok);
+  --color-loss: var(--loss);
   --color-surface: var(--surface);
   --color-line: var(--line);
   --font-sans: var(--font-geist-sans);
@@ -35,4 +37,53 @@ body {
 
 ::selection {
   background: color-mix(in srgb, var(--gold) 40%, transparent);
+}
+
+@keyframes match-result-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes match-clash-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.match-result {
+  animation: match-result-in 600ms ease;
+}
+
+.match-clash {
+  animation: match-clash-pop 700ms ease 120ms both;
+}
+
+.match-duelist-win {
+  box-shadow: 0 0 40px color-mix(in srgb, var(--gold) 25%, transparent);
+}
+
+.match-duelist-lose {
+  opacity: 0.55;
+  filter: grayscale(0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .match-result,
+  .match-clash {
+    animation: none;
+  }
 }
