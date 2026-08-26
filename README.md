@@ -2,9 +2,11 @@
 
 Private rock-paper-scissors on [COTI Testnet](https://testnet.cotiscan.io). Stake native testnet COTI, encrypt your move in the browser, and let the contract name a winner without publishing either hand.
 
-This is a separate product from [HushDeal](https://hushdeal.vercel.app). HushDeal keeps a wallet-free RPS playground. HushHand is the matchmaking table with wallets, escrow, a leaderboard, and a protocol fee.
+This is a separate product from [HushDeal](https://hushdeal.vercel.app). HushDeal keeps a wallet-free RPS playground. HushHand is the matchmaking table with wallets, escrow, a leaderboard, and a stake-weighted lottery.
 
 > Testnet only. Not a real-money casino.
+
+Live contract on COTI Testnet: [`0x6eB0F38d36fcBD7fB1cd148413EA32F119D7a246`](https://testnet.cotiscan.io/address/0x6eB0F38d36fcBD7fB1cd148413EA32F119D7a246). Win rake goes to [`0x400Ad4402a2Eee2ecE0894dF6c4742BAd5a2f06a`](https://testnet.cotiscan.io/address/0x400Ad4402a2Eee2ecE0894dF6c4742BAd5a2f06a).
 
 ## How a match works
 
@@ -13,13 +15,15 @@ This is a separate product from [HushDeal](https://hushdeal.vercel.app). HushDea
 3. A second wallet joins with the **same** stake and its own encrypted move.
 4. Anyone can call `settle`. MPC compares the hands with `(a - b + 3) % 3 == 1` (encoding rock=1, paper=2, scissors=3). Gestures are never decrypted. Only a winner/draw flag is revealed so the contract can pay.
 
-## Protocol fee
+## Protocol fee and lottery
 
-On **create** and **join**, the contract takes `feeBps` of `msg.value` (default **2%**, max 5%) and sends it immediately to `FEE_RECIPIENT`. The remainder is escrowed.
+A `feeBps` rake (default **2%**, max 5%) is **reserved** from each stake and held in the contract until settle. It is not taken on create/join.
 
-- Winner receives `2 × escrow`.
-- Draw refunds each player’s escrow.
-- Cancel refunds the creator’s escrow. The fee already sent is not returned.
+- **Win:** both rakes go to `FEE_RECIPIENT`. Winner receives `2 × escrow`.
+- **Draw:** both rakes go into the **lottery pot**. Each player gets their escrow back.
+- **Cancel:** full stake is refunded. No rake, no tickets.
+
+Every **settled** game (win or draw) mints lottery tickets equal to that player’s stake. Odds are stake-weighted. Anyone can call `drawLottery` once the pot is at least `MIN_LOTTERY_POT` (default 0.05 COTI). The owner can draw earlier. Randomness comes from COTI `MpcCore.rand64()`. After a draw, the round resets and ticket weights start again.
 
 Set `FEE_RECIPIENT` to **your** wallet before deploying.
 
@@ -35,9 +39,10 @@ Fill in:
 | Variable | Purpose |
 | --- | --- |
 | `DEPLOYER_PRIVATE_KEY` | Wallet that deploys `PrivateRps` (must have testnet COTI) |
-| `FEE_RECIPIENT` | Your wallet that receives the 2% fee |
+| `FEE_RECIPIENT` | Your wallet that receives the win rake |
 | `FEE_BPS` | `200` = 2% |
 | `MIN_STAKE` | Minimum native COTI per side, e.g. `0.1` |
+| `MIN_LOTTERY_POT` | Public draw allowed at this pot size, e.g. `0.05` |
 | `NEXT_PUBLIC_CONTRACT_ADDRESS` | Set after deploy |
 
 ```bash
@@ -60,4 +65,4 @@ Get testnet COTI from the COTI Discord faucet. Add COTI Testnet in MetaMask if i
 
 ## Leaderboard
 
-`/leaderboard` aggregates public `MatchSettled` events: wins, losses, draws, and COTI won. Hands are not on the board.
+`/leaderboard` aggregates public `MatchSettled` events: wins, losses, draws, and COTI won. Hands are not on the board. `/lottery` shows the live pot, ticket weights, and past jackpots.

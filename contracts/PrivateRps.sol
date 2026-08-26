@@ -6,7 +6,7 @@ import "@coti-io/coti-contracts/contracts/utils/mpc/MpcCore.sol";
 /// @title HushHand Private RPS
 /// @notice Two players stake native COTI and commit encrypted moves.
 /// Winner is computed with COTI MPC without publishing the gestures.
-/// A protocol fee is taken from each stake and sent to feeRecipient.
+/// Win rake goes to feeRecipient. Draw rake funds a stake-weighted lottery.
 contract PrivateRps {
     enum Status {
         None,
@@ -40,8 +40,16 @@ contract PrivateRps {
     uint256[] private openIds;
     mapping(uint256 => uint256) private openIndex; // id => index+1
 
+    uint256 public lotteryPot;
+    uint256 public lotteryRound;
+    uint256 public totalTickets;
+    uint256 public minLotteryPot;
+    mapping(uint256 => mapping(address => uint256)) public tickets;
+    mapping(uint256 => address[]) private lotteryPlayers;
+
     event FeeRecipientUpdated(address indexed recipient);
     event FeeBpsUpdated(uint16 feeBps);
+    event MinLotteryPotUpdated(uint256 minLotteryPot);
     event MatchOpened(
         uint256 indexed matchId,
         address indexed player,
@@ -58,19 +66,38 @@ contract PrivateRps {
         bool draw
     );
     event MatchCanceled(uint256 indexed matchId, address indexed player);
+    event LotteryTicketsIssued(
+        uint256 indexed round,
+        address indexed player,
+        uint256 tickets,
+        uint256 indexed matchId
+    );
+    event LotteryFunded(uint256 indexed round, uint256 amount, uint256 indexed matchId);
+    event LotteryDrawn(
+        uint256 indexed round,
+        address indexed winner,
+        uint256 prize,
+        uint256 totalTickets
+    );
 
     modifier onlyOwner() {
         require(msg.sender == owner, "not owner");
         _;
     }
 
-    constructor(address payable _feeRecipient, uint16 _feeBps, uint256 _minStake) {
+    constructor(
+        address payable _feeRecipient,
+        uint16 _feeBps,
+        uint256 _minStake,
+        uint256 _minLotteryPot
+    ) {
         require(_feeRecipient != address(0), "fee recipient");
         require(_feeBps <= MAX_FEE_BPS, "fee too high");
         owner = msg.sender;
         feeRecipient = _feeRecipient;
         feeBps = _feeBps;
         minStake = _minStake;
+        minLotteryPot = _minLotteryPot;
     }
 
     function setFeeRecipient(address payable _feeRecipient) external onlyOwner {
@@ -85,8 +112,25 @@ contract PrivateRps {
         emit FeeBpsUpdated(_feeBps);
     }
 
+    function setMinLotteryPot(uint256 _minLotteryPot) external onlyOwner {
+        minLotteryPot = _minLotteryPot;
+        emit MinLotteryPotUpdated(_minLotteryPot);
+    }
+
     function getOpenMatchIds() external view returns (uint256[] memory) {
         return openIds;
+    }
+
+    function getLotteryPlayers() external view returns (address[] memory) {
+        return lotteryPlayers[lotteryRound];
+    }
+
+    function ticketsOf(address player) external view returns (uint256) {
+        return tickets[lotteryRound][player];
+    }
+
+    function canDrawLottery() public view returns (bool) {
+        return lotteryPot > 0 && totalTickets > 0 && lotteryPot >= minLotteryPot;
     }
 
     function getMatch(
@@ -132,9 +176,6 @@ contract PrivateRps {
         m.createdAt = uint64(block.timestamp);
 
         _addOpen(matchId);
-        if (fee > 0) {
-            _send(feeRecipient, fee);
-        }
         emit MatchOpened(matchId, msg.sender, msg.value, escrow, fee);
     }
 
@@ -144,7 +185,6 @@ contract PrivateRps {
         require(msg.sender != m.playerA, "same player");
         require(msg.value == m.grossStake, "wrong stake");
 
-        uint256 fee = (msg.value * feeBps) / BPS_DENOMINATOR;
         gtUint64 gtMove = MpcCore.validateCiphertext(move);
 
         m.playerB = payable(msg.sender);
@@ -152,9 +192,6 @@ contract PrivateRps {
         m.status = Status.Ready;
         _removeOpen(matchId);
 
-        if (fee > 0) {
-            _send(feeRecipient, fee);
-        }
         emit MatchJoined(matchId, msg.sender);
     }
 
@@ -165,7 +202,7 @@ contract PrivateRps {
         m.status = Status.Canceled;
         _removeOpen(matchId);
         emit MatchCanceled(matchId, msg.sender);
-        _send(m.playerA, m.escrowEach);
+        _send(m.playerA, m.grossStake);
     }
 
     /// @notice Computes the winner from encrypted moves. Gestures stay private.
@@ -179,7 +216,17 @@ contract PrivateRps {
         bool draw = MpcCore.decrypt(MpcCore.eq(a, b));
         m.status = Status.Settled;
 
+        _issueTickets(m.playerA, m.grossStake, matchId);
+        _issueTickets(m.playerB, m.grossStake, matchId);
+
+        uint256 feeEach = m.grossStake - m.escrowEach;
+
         if (draw) {
+            if (feeEach > 0) {
+                uint256 rake = feeEach * 2;
+                lotteryPot += rake;
+                emit LotteryFunded(lotteryRound, rake, matchId);
+            }
             emit MatchSettled(matchId, m.playerA, m.playerB, 0, true);
             _send(m.playerA, m.escrowEach);
             _send(m.playerB, m.escrowEach);
@@ -187,7 +234,6 @@ contract PrivateRps {
         }
 
         // (a - b + 3) % 3 == 1 => A wins. Encoding: rock=1, paper=2, scissors=3.
-        // uint64 overloads avoid setPublic64(uint64 vs int64) ambiguity.
         gtUint64 diff = MpcCore.rem(MpcCore.sub(MpcCore.add(a, uint64(3)), b), uint64(3));
         bool aWins = MpcCore.decrypt(MpcCore.eq(diff, uint64(1)));
 
@@ -195,7 +241,53 @@ contract PrivateRps {
         address payable loser = aWins ? m.playerB : m.playerA;
         uint256 pot = m.escrowEach * 2;
         emit MatchSettled(matchId, winner, loser, pot, false);
+        if (feeEach > 0) {
+            _send(feeRecipient, feeEach * 2);
+        }
         _send(winner, pot);
+    }
+
+    /// @notice Pays the lottery pot to one ticket holder, weighted by stake-tickets.
+    /// Anyone may call once the pot meets minLotteryPot. Owner may draw earlier.
+    function drawLottery() external {
+        require(lotteryPot > 0 && totalTickets > 0, "empty lottery");
+        require(canDrawLottery() || msg.sender == owner, "pot too small");
+
+        address[] storage players = lotteryPlayers[lotteryRound];
+        require(players.length > 0, "no players");
+
+        uint64 entropy = MpcCore.decrypt(MpcCore.rand64());
+        uint256 needle = uint256(entropy) % totalTickets;
+        uint256 acc;
+        address payable winner;
+        for (uint256 i = 0; i < players.length; i++) {
+            acc += tickets[lotteryRound][players[i]];
+            if (needle < acc) {
+                winner = payable(players[i]);
+                break;
+            }
+        }
+        require(winner != address(0), "no winner");
+
+        uint256 prize = lotteryPot;
+        uint256 round = lotteryRound;
+        uint256 weight = totalTickets;
+        lotteryPot = 0;
+        totalTickets = 0;
+        lotteryRound = round + 1;
+
+        emit LotteryDrawn(round, winner, prize, weight);
+        _send(winner, prize);
+    }
+
+    function _issueTickets(address player, uint256 stake, uint256 matchId) private {
+        uint256 round = lotteryRound;
+        if (tickets[round][player] == 0) {
+            lotteryPlayers[round].push(player);
+        }
+        tickets[round][player] += stake;
+        totalTickets += stake;
+        emit LotteryTicketsIssued(round, player, stake, matchId);
     }
 
     function _addOpen(uint256 matchId) private {

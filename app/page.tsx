@@ -1,4 +1,5 @@
 import { CreateMatch } from "@/components/create-match";
+import { LotteryPot } from "@/components/lottery-pot";
 import { MatchBoard } from "@/components/match-board";
 import { feePercentLabel } from "@/lib/constants";
 
@@ -18,9 +19,10 @@ export default function HomePage() {
           without publishing either gesture.
         </p>
         <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
-          A {feePercentLabel()} protocol fee is taken from each create and join
-          transaction and sent to the HushHand fee wallet. The rest stays in
-          escrow until the match ends.
+          A {feePercentLabel()} rake is reserved from each stake. A winner
+          sends that rake to the HushHand fee wallet. A tie drops it into the
+          lottery pot instead. Every settled game mints tickets equal to your
+          stake.
         </p>
       </section>
 
@@ -39,7 +41,7 @@ export default function HomePage() {
           {
             step: "03",
             title: "Settle privately",
-            body: "MPC names a winner. Hands stay private. Wins land on the leaderboard.",
+            body: "MPC names a winner. Hands stay private. Ties fund the lottery. Both players get tickets.",
           },
         ].map((item) => (
           <li
@@ -57,6 +59,7 @@ export default function HomePage() {
         <CreateMatch />
         <MatchBoard />
       </div>
+      <LotteryPot />
     </div>
   );
 }

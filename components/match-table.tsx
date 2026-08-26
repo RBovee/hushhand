@@ -138,7 +138,7 @@ export function MatchTable({ id }: { id: string }) {
             : ready
               ? "Both hands are locked. Settle to pay the winner without revealing gestures."
               : settled
-                ? "Settled. Hands stay private."
+                ? "Settled. Hands stay private. Both players received lottery tickets equal to their stake."
                 : "Canceled"}
         </p>
       </section>
@@ -183,7 +183,7 @@ export function MatchTable({ id }: { id: string }) {
           disabled={pending !== null}
           className="rounded-full border border-line px-5 py-3 text-sm text-muted hover:text-foreground disabled:opacity-60"
         >
-          {pending === "cancel" ? "Canceling…" : "Cancel and recover escrow"}
+          {pending === "cancel" ? "Canceling…" : "Cancel and recover full stake"}
         </button>
       ) : null}
 

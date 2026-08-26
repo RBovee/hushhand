@@ -4,9 +4,12 @@ export const COTI_TESTNET_RPC =
 export const COTI_EXPLORER =
   process.env.NEXT_PUBLIC_EXPLORER ?? "https://testnet.cotiscan.io";
 export const CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? "";
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ??
+  "0x6eB0F38d36fcBD7fB1cd148413EA32F119D7a246";
 export const DEFAULT_FEE_BPS = Number(process.env.NEXT_PUBLIC_FEE_BPS ?? 200);
 export const DEFAULT_MIN_STAKE = process.env.NEXT_PUBLIC_MIN_STAKE ?? "0.1";
+export const DEFAULT_MIN_LOTTERY_POT =
+  process.env.NEXT_PUBLIC_MIN_LOTTERY_POT ?? "0.05";
 
 export function feePercentLabel(bps = DEFAULT_FEE_BPS) {
   return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2)}%`;
@@ -127,6 +130,69 @@ export const PRIVATE_RPS_ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
+    type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "lotteryPot",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "lotteryRound",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "totalTickets",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "minLotteryPot",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "ticketsOf",
+    stateMutability: "view",
+    inputs: [{ name: "player", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "getLotteryPlayers",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+  },
+  {
+    type: "function",
+    name: "canDrawLottery",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "drawLottery",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
     type: "event",
     name: "MatchOpened",
     inputs: [
@@ -162,6 +228,35 @@ export const PRIVATE_RPS_ABI = [
     inputs: [
       { name: "matchId", type: "uint256", indexed: true },
       { name: "player", type: "address", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "LotteryTicketsIssued",
+    inputs: [
+      { name: "round", type: "uint256", indexed: true },
+      { name: "player", type: "address", indexed: true },
+      { name: "tickets", type: "uint256", indexed: false },
+      { name: "matchId", type: "uint256", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "LotteryFunded",
+    inputs: [
+      { name: "round", type: "uint256", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "matchId", type: "uint256", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "LotteryDrawn",
+    inputs: [
+      { name: "round", type: "uint256", indexed: true },
+      { name: "winner", type: "address", indexed: true },
+      { name: "prize", type: "uint256", indexed: false },
+      { name: "totalTickets", type: "uint256", indexed: false },
     ],
   },
 ] as const;

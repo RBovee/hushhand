@@ -17,6 +17,12 @@ export function SiteHeader() {
           Tables
         </Link>
         <Link
+          href="/lottery"
+          className="text-sm text-muted transition hover:text-foreground"
+        >
+          Lottery
+        </Link>
+        <Link
           href="/leaderboard"
           className="text-sm text-muted transition hover:text-foreground"
         >

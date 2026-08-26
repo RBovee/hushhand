@@ -41,9 +41,9 @@ export function CreateMatch() {
       <h2 className="font-serif text-3xl">Open a match</h2>
       <p className="mt-3 text-sm leading-relaxed text-muted">
         Connect your wallet, pick a hand, and stake testnet COTI. Your move is
-        encrypted before it leaves the browser. A {feePercentLabel()} protocol
-        fee is sent to the HushHand fee wallet; the rest sits in escrow until
-        someone joins.
+        encrypted before it leaves the browser. A {feePercentLabel()} rake is
+        reserved from each side. A win pays it to the HushHand wallet; a tie
+        feeds the lottery. You still get lottery tickets either way.
       </p>
       <div className="mt-6 grid grid-cols-3 gap-3">
         {HANDS.map((item) => (
