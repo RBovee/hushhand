@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { connectWallet, shortAddress } from "@/lib/wallet";
+import { connectWallet, getEthereum, shortAddress, walletErrorMessage } from "@/lib/wallet";
 
 interface WalletState {
   address: string | null;
@@ -26,17 +26,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const ethereum = (
-      window as Window & {
-        ethereum?: {
-          request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-          on?: (event: string, handler: (accounts: string[]) => void) => void;
-          removeListener?: (event: string, handler: (accounts: string[]) => void) => void;
-        };
-      }
-    ).ethereum;
-    if (!ethereum?.on) return;
-    const handler = (accounts: string[]) => {
+    let ethereum: ReturnType<typeof getEthereum>;
+    try {
+      ethereum = getEthereum();
+    } catch {
+      return;
+    }
+    if (!ethereum.on) return;
+    const handler = (...args: unknown[]) => {
+      const accounts = Array.isArray(args[0]) ? (args[0] as string[]) : [];
       setAddress(accounts[0] ?? null);
     };
     ethereum.on("accountsChanged", handler);
@@ -52,7 +50,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const next = await connectWallet();
       setAddress(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not connect");
+      setError(walletErrorMessage(err));
     } finally {
       setConnecting(false);
     }
@@ -92,7 +90,9 @@ export function ConnectButton() {
             ? shortAddress(address)
             : "Connect wallet"}
       </button>
-      {error ? <p className="text-xs text-red-300">{error}</p> : null}
+      {error ? (
+        <p className="max-w-xs text-right text-xs text-red-300">{error}</p>
+      ) : null}
     </div>
   );
 }
