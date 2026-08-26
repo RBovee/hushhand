@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CONTRACT_ADDRESS } from "@/lib/constants";
+import { CONTRACT_ADDRESS, feePercentLabel } from "@/lib/constants";
 import {
   formatTicketWeight,
   loadLottery,
@@ -56,8 +56,9 @@ export function LotteryPot() {
         </Link>
       </div>
       <p className="mt-3 text-sm leading-relaxed text-muted">
-        Ties feed this pot. Every settled game gives both players tickets equal
-        to their stake. When the pot is large enough, anyone can draw a winner.
+        Only the {feePercentLabel()} rake from a tie goes in here — not the
+        full stake. Tickets are just odds. Anyone can draw at{" "}
+        {lottery ? `${formatCoti(lottery.minPot)} COTI` : "the minimum"}.
       </p>
       {error ? <p className="mt-6 text-sm text-red-300">{error}</p> : null}
       {lottery ? (

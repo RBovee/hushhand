@@ -20,6 +20,12 @@ export interface LotteryDraw {
   totalTickets: bigint;
 }
 
+export interface LotteryFunding {
+  round: string;
+  matchId: string;
+  amount: bigint;
+}
+
 export async function loadLottery(
   contract: Contract,
 ): Promise<LotterySnapshot> {
@@ -73,6 +79,23 @@ export async function loadLotteryHistory(
     });
   }
   return draws.reverse();
+}
+
+export async function loadLotteryFunding(
+  contract: Contract,
+): Promise<LotteryFunding[]> {
+  const events = await contract.queryFilter(contract.filters.LotteryFunded());
+  const rows: LotteryFunding[] = [];
+  for (const event of events) {
+    const args = "args" in event ? event.args : undefined;
+    if (!args) continue;
+    rows.push({
+      round: String(args.round),
+      matchId: String(args.matchId),
+      amount: BigInt(args.amount),
+    });
+  }
+  return rows.reverse();
 }
 
 export function ticketOdds(tickets: bigint, total: bigint) {

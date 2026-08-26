@@ -6,9 +6,11 @@ import { formatCoti } from "@/lib/leaderboard";
 import {
   formatTicketWeight,
   loadLottery,
+  loadLotteryFunding,
   loadLotteryHistory,
   ticketOdds,
   type LotteryDraw,
+  type LotteryFunding,
   type LotterySnapshot,
 } from "@/lib/lottery";
 import {
@@ -24,6 +26,7 @@ export function Lottery() {
   const { address, connect } = useWallet();
   const [lottery, setLottery] = useState<LotterySnapshot | null>(null);
   const [history, setHistory] = useState<LotteryDraw[]>([]);
+  const [funding, setFunding] = useState<LotteryFunding[]>([]);
   const [pending, setPending] = useState(false);
   const [tx, setTx] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(
@@ -33,12 +36,14 @@ export function Lottery() {
   const refresh = useCallback(async () => {
     if (!CONTRACT_ADDRESS) return;
     const contract = getReadContract();
-    const [snapshot, draws] = await Promise.all([
+    const [snapshot, draws, funded] = await Promise.all([
       loadLottery(contract),
       loadLotteryHistory(contract),
+      loadLotteryFunding(contract),
     ]);
     setLottery(snapshot);
     setHistory(draws);
+    setFunding(funded);
     setError(null);
   }, []);
 
@@ -93,14 +98,19 @@ export function Lottery() {
         </p>
         <h1 className="font-serif mt-2 text-4xl">Stake-weighted lottery</h1>
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted">
-          A {feePercentLabel()} rake is reserved from each stake. If someone
-          wins, that rake goes to the HushHand fee wallet. If the hands tie, it
-          stays in this pot. Every settled game — win or draw — mints tickets
-          equal to your stake. When the pot reaches{" "}
+          A {feePercentLabel()} rake is reserved from each stake. A winner pays
+          that rake to the HushHand fee wallet. A tie puts that same rake into
+          this pot — not the full stake. Tickets are stake-weight for odds
+          only. When the pot reaches{" "}
           {lottery ? `${formatCoti(lottery.minPot)} COTI` : "the minimum"},
-          anyone can draw. COTI MPC supplies the random seed; the winner is
-          public, the hands that funded the pot are not.
+          anyone can draw.
         </p>
+        {lottery && lottery.pot < lottery.minPot ? (
+          <p className="mt-3 text-sm text-gold">
+            {formatCoti(lottery.minPot - lottery.pot)} COTI more from ties
+            until anyone can draw.
+          </p>
+        ) : null}
         {lottery ? (
           <dl className="mt-8 grid gap-6 sm:grid-cols-3">
             <div>
@@ -153,8 +163,7 @@ export function Lottery() {
       <section className="rounded-3xl border border-line bg-surface p-6 md:p-8">
         <h2 className="font-serif text-2xl">This round</h2>
         <p className="mt-2 text-sm text-muted">
-          Odds are stake-weighted. Play more, or stake more, and your slice
-          grows.
+          Odds follow stake-weight, not the coins in the pot.
         </p>
         {lottery && lottery.players.length === 0 ? (
           <p className="mt-6 text-sm text-muted">
@@ -188,6 +197,29 @@ export function Lottery() {
             );
           })}
         </ul>
+      </section>
+
+      <section className="rounded-3xl border border-line bg-surface p-6 md:p-8">
+        <h2 className="font-serif text-2xl">Ties that filled this pot</h2>
+        <p className="mt-2 text-sm text-muted">
+          Only the {feePercentLabel()} rake from a tie is added. The rest of
+          each stake is refunded.
+        </p>
+        {funding.length === 0 ? (
+          <p className="mt-4 text-sm text-muted">No ties have funded the pot yet.</p>
+        ) : (
+          <ul className="mt-6 space-y-3">
+            {funding.map((row) => (
+              <li
+                key={`${row.round}-${row.matchId}`}
+                className="flex items-center justify-between rounded-2xl border border-line px-4 py-3 text-sm"
+              >
+                <span>Table #{row.matchId} · round #{row.round}</span>
+                <span className="text-gold">+{formatCoti(row.amount)} COTI</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="rounded-3xl border border-line bg-surface p-6 md:p-8">
